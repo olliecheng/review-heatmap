@@ -281,10 +281,4 @@ function applyDateOffset(date: Date): Date {
   return new Date(date.getTime() + date.getTimezoneOffset() * 60 * 1000);
 }
 
-// return local timezone offset in seconds at given unix timestamp
-function tzOffsetByTimestamp(timestamp: number): number {
-  let date = new Date(timestamp * 1000);
-  return date.getTimezoneOffset() * 60;
-}
-
 globalThis.ReviewHeatmap = ReviewHeatmap;
