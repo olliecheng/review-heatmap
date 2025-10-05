@@ -128,14 +128,12 @@ class ReviewHeatmap {
         }
 
         if (isEmpty) {
-          tooltip = `<b>No</b> ${
-            Date.now() < cellData.t ? "cards due" : "reviews"
-          } on ${formatData.date}`;
+          tooltip = `<b>No</b> ${Date.now() < cellData.t ? "cards due" : "reviews"
+            } on ${formatData.date}`;
         } else {
           const label = Math.abs(cellData.v) == 1 ? "card" : "cards";
-          tooltip = `<b>${count}</b> ${label} <b>${
-            cellData.v < 0 ? "due" : "reviewed"
-          }</b> ${formatData.connector} ${formatData.date}`;
+          tooltip = `<b>${count}</b> ${label} <b>${cellData.v < 0 ? "due" : "reviewed"
+            }</b> ${formatData.connector} ${formatData.date}`;
         }
 
         return tooltip;
@@ -206,10 +204,24 @@ class ReviewHeatmap {
         //      https://github.com/wa0x6e/cal-heatmap/issues/126
         let results = {};
         for (let timestamp_string in timestamps) {
+          // `value` is in ms
           let value = timestamps[timestamp_string];
-          let timestamp = parseInt(timestamp_string, 10);
-          results[timestamp + tzOffsetByTimestamp(timestamp)] = value;
+          let epochSeconds = parseInt(timestamp_string, 10) * 1000;
+
+          // interpret the timestamp as a Unix timestamp at 00:00:00 UTC on
+          // the given date
+          const utcDate = new Date(epochSeconds)
+          const year = utcDate.getUTCFullYear()
+          const month = utcDate.getUTCMonth()
+          const day = utcDate.getUTCDate()
+
+          // convert to local date at 00:00:00 for CalHeatMap()
+          const date = new Date(year, month, day, 0, 0, 0, 0);
+          const localSeconds = Math.floor(date.getTime() / 1000)
+
+          results[localSeconds] = value;
         }
+
         return results;
       },
       data: data,
