@@ -1,0 +1,18 @@
+# Testing dependencies for review-heatmap
+# Install with: pip install -r tests/requirements.txt
+
+# Core dependencies
+anki>=2.1.28
+aqt>=2.1.28
+
+# Testing framework
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+
+# For async tests if needed
+pytest-asyncio>=0.21.0
+
+# Test utilities
+freezegun>=1.2.0  # For mocking time
+faker>=18.0.0     # For generating test data
