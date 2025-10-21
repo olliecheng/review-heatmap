@@ -1,0 +1,138 @@
+[project]
+name = "review-heatmap"
+version = "1.0.1"
+description = "Review Heatmap - Anki add-on for visualizing review activity"
+authors = [
+    { name = "Glutanimate", email = "glutanimate@users.noreply.github.com" }
+]
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "AGPL-3.0-or-later" }
+keywords = ["anki", "stats", "motivation", "streak", "heatmap", "overview"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Education",
+]
+
+# Build dependencies
+dependencies = []
+
+# Optional dependency groups
+[project.optional-dependencies]
+build = [
+    "aab",
+]
+
+test = [
+    "anki>=2.1.28",
+    "aqt>=2.1.28",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "pytest-asyncio>=0.21.0",
+    "freezegun>=1.2.0",
+    "faker>=18.0.0",
+]
+
+dev = [
+    # Include all build and test dependencies for development
+    "aab",
+    "anki>=2.1.28",
+    "aqt>=2.1.28",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "pytest-asyncio>=0.21.0",
+    "freezegun>=1.2.0",
+    "faker>=18.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/glutanimate/review-heatmap"
+Repository = "https://github.com/glutanimate/review-heatmap"
+Issues = "https://github.com/glutanimate/review-heatmap/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/review_heatmap"]
+
+[tool.pytest.ini_options]
+# Pytest configuration (from pytest.ini)
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "-ra",
+    "--showlocals",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "timezone: marks tests that test timezone functionality",
+    "collection: marks tests that require Anki collections",
+]
+log_cli = false
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:anki.*",
+    "ignore::DeprecationWarning:aqt.*",
+]
+
+[tool.coverage.run]
+source = ["src/review_heatmap"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # unused imports in __init__.py

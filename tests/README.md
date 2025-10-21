@@ -26,9 +26,25 @@ The testing framework provides:
 
 ## Installation
 
-### 1. Install Dependencies
+### Using uv (Recommended)
+
+[uv](https://github.com/astral-sh/uv) is a fast Python package installer and resolver.
 
 ```bash
+# Install test dependencies
+uv pip install --system -e ".[test]"
+
+# Verify installation
+pytest --version
+```
+
+### Using pip (Traditional)
+
+```bash
+# Install from pyproject.toml
+pip install -e ".[test]"
+
+# Or using requirements.txt (deprecated)
 pip install -r tests/requirements.txt
 ```
 
@@ -39,11 +55,7 @@ This installs:
 - `pytest-cov` - Coverage reporting
 - Additional testing utilities
 
-### 2. Verify Installation
-
-```bash
-pytest --version
-```
+For more detailed development setup instructions, see [DEVELOPMENT.md](../DEVELOPMENT.md).
 
 ## Quick Start
 
