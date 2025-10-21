@@ -1,323 +1,186 @@
+#!/usr/bin/env python3
 """
-Utilities for building test Anki collections with custom review data.
+Generate an Anki collection with hourly review data for testing review-heatmap.
 
-This module provides a fluent API for creating Anki collections populated
-with cards and review history for testing purposes.
+This script creates an Anki collection with a single card that has been reviewed
+every hour between Dec 1, 2023 00:00:00 UTC and Feb 1, 2025 00:00:00 UTC.
+
+Usage:
+    python collection_builder.py --output test_collection.anki2
 """
 
+import argparse
+import sys
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Tuple
+from pathlib import Path
 
 from anki.collection import Collection
-from anki.consts import CARD_TYPE_NEW, CARD_TYPE_REV, QUEUE_TYPE_REV
-from anki.notes import Note
+from anki.consts import CARD_TYPE_REV, QUEUE_TYPE_REV
 
 
-class CollectionBuilder:
+def generate_hourly_reviews(col: Collection, card_id: int, start_date: datetime, end_date: datetime):
     """
-    Builder for creating test Anki collections with review history.
+    Generate hourly reviews for a card between start and end dates.
 
-    Usage:
-        builder = CollectionBuilder(col)
-        builder.add_deck("Test Deck")
-        builder.add_cards_with_reviews(
-            deck_name="Test Deck",
-            num_cards=10,
-            review_dates=["2024-01-01", "2024-01-02"]
-        )
+    Args:
+        col: Anki collection
+        card_id: ID of the card to add reviews for
+        start_date: Start datetime (inclusive)
+        end_date: End datetime (inclusive)
     """
+    current_time = start_date
+    review_counter = 0
 
-    def __init__(self, col: Collection):
-        """
-        Initialize the collection builder.
+    print(f"Generating reviews from {start_date} to {end_date}...")
 
-        Args:
-            col: The Anki collection to populate
-        """
-        self.col = col
-        self._decks = {}
-        self._note_type = None
-        self._review_counter = 0  # Counter to ensure unique review IDs
+    reviews_added = 0
+    while current_time <= end_date:
+        # Create timestamp in milliseconds (Anki format)
+        timestamp_ms = int(current_time.timestamp() * 1000)
 
-    def add_deck(self, name: str, parent: Optional[str] = None) -> "CollectionBuilder":
-        """
-        Add a deck to the collection.
+        # Create unique ID by adding counter
+        unique_id = timestamp_ms + review_counter
+        review_counter += 1
 
-        Args:
-            name: Name of the deck
-            parent: Optional parent deck name for nested decks
-
-        Returns:
-            Self for method chaining
-        """
-        if parent:
-            full_name = f"{parent}::{name}"
-        else:
-            full_name = name
-
-        deck_id = self.col.decks.id(full_name)
-        self._decks[full_name] = deck_id
-
-        return self
-
-    def _ensure_note_type(self):
-        """Ensure a basic note type exists for creating cards."""
-        if self._note_type is None:
-            # Use the default "Basic" note type that comes with new collections
-            models = self.col.models.all()
-            if models:
-                self._note_type = models[0]
-            else:
-                # Create a basic note type if none exists
-                mm = self.col.models
-                basic = mm.new("Basic")
-                mm.add_field(basic, mm.new_field("Front"))
-                mm.add_field(basic, mm.new_field("Back"))
-
-                template = mm.new_template("Card 1")
-                template["qfmt"] = "{{Front}}"
-                template["afmt"] = "{{FrontSide}}\n\n<hr id=answer>\n\n{{Back}}"
-                mm.add_template(basic, template)
-
-                mm.add(basic)
-                self._note_type = basic
-
-    def add_note(
-        self,
-        deck_name: str,
-        front: str = "Test Front",
-        back: str = "Test Back"
-    ) -> Note:
-        """
-        Add a note (card) to the collection.
-
-        Args:
-            deck_name: Name of the deck to add the note to
-            front: Front of the card
-            back: Back of the card
-
-        Returns:
-            The created Note object
-        """
-        self._ensure_note_type()
-
-        deck_id = self._decks.get(deck_name)
-        if deck_id is None:
-            raise ValueError(f"Deck '{deck_name}' not found. Call add_deck() first.")
-
-        note = Note(self.col, self._note_type)
-        note["Front"] = front
-        note["Back"] = back
-
-        self.col.add_note(note, deck_id)
-
-        return note
-
-    def add_cards_with_reviews(
-        self,
-        deck_name: str,
-        num_cards: int,
-        review_dates: List[str],
-        reviews_per_card: int = 1,
-        rollover_hour: int = 4
-    ) -> List[int]:
-        """
-        Add cards with simulated review history.
-
-        Args:
-            deck_name: Name of the deck
-            num_cards: Number of cards to create
-            review_dates: List of date strings (YYYY-MM-DD) when reviews occurred
-            reviews_per_card: Number of reviews per card per date
-            rollover_hour: Hour when new day starts (for timezone adjustment)
-
-        Returns:
-            List of card IDs created
-        """
-        card_ids = []
-
-        for i in range(num_cards):
-            note = self.add_note(
-                deck_name=deck_name,
-                front=f"Front {i+1}",
-                back=f"Back {i+1}"
-            )
-
-            # Get the card created from this note
-            cards = note.cards()
-            if not cards:
-                continue
-
-            card = cards[0]
-            card_ids.append(card.id)
-
-            # Add review history
-            for date_str in review_dates:
-                for _ in range(reviews_per_card):
-                    self._add_review(card.id, date_str, rollover_hour)
-
-            # Mark card as review card (not new)
-            card.type = CARD_TYPE_REV
-            card.queue = QUEUE_TYPE_REV
-            self.col.update_card(card)
-
-        self.col.save()
-        return card_ids
-
-    def _add_review(self, card_id: int, date_str: str, rollover_hour: int = 4):
-        """
-        Add a review entry to the revlog for a specific date.
-
-        Args:
-            card_id: ID of the card being reviewed
-            date_str: Date string in YYYY-MM-DD format
-            rollover_hour: Hour when new day starts
-        """
-        # Parse the date and add the rollover hour
-        date = datetime.strptime(date_str, "%Y-%m-%d")
-        review_time = date.replace(
-            hour=rollover_hour + 2,  # Review a couple hours after day start
-            minute=0,
-            second=0,
-            tzinfo=timezone.utc
-        )
-
-        review_timestamp_ms = int(review_time.timestamp() * 1000)
-
-        # Add counter to ensure unique ID for each review
-        # (multiple reviews can occur at the same millisecond)
-        unique_id = review_timestamp_ms + self._review_counter
-        self._review_counter += 1
-
-        # Insert into revlog
+        # Insert review into revlog
         # Schema: id, cid, usn, ease, ivl, lastIvl, factor, time, type
-        self.col.db.execute(
+        col.db.execute(
             """
             INSERT INTO revlog (id, cid, usn, ease, ivl, lastIvl, factor, time, type)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            unique_id,            # id (unique timestamp in ms)
-            card_id,              # cid
-            -1,                   # usn
-            3,                    # ease (Good)
-            10,                   # ivl (interval in days)
-            1,                    # lastIvl
-            2500,                 # factor
-            5000,                 # time (5 seconds)
-            1,                    # type (review)
+            unique_id,      # id (unique timestamp in ms)
+            card_id,        # cid (card ID)
+            -1,             # usn (update sequence number)
+            3,              # ease (3 = Good)
+            10,             # ivl (interval in days)
+            1,              # lastIvl (last interval)
+            2500,           # factor (ease factor)
+            5000,           # time (5 seconds review time)
+            1,              # type (1 = review)
         )
 
-    def add_due_cards(
-        self,
-        deck_name: str,
-        num_cards: int,
-        due_in_days: int
-    ) -> List[int]:
-        """
-        Add cards that are due in the future.
+        reviews_added += 1
+        if reviews_added % 1000 == 0:
+            print(f"  Added {reviews_added} reviews...")
 
-        Args:
-            deck_name: Name of the deck
-            num_cards: Number of cards to create
-            due_in_days: Number of days from now when cards are due
+        # Move to next hour
+        current_time += timedelta(hours=1)
 
-        Returns:
-            List of card IDs created
-        """
-        card_ids = []
-
-        for i in range(num_cards):
-            note = self.add_note(
-                deck_name=deck_name,
-                front=f"Due Card {i+1}",
-                back=f"Due Back {i+1}"
-            )
-
-            cards = note.cards()
-            if not cards:
-                continue
-
-            card = cards[0]
-
-            # Set card as review type and due in future
-            card.type = CARD_TYPE_REV
-            card.queue = QUEUE_TYPE_REV
-            card.due = self.col.sched.today + due_in_days
-
-            self.col.update_card(card)
-            card_ids.append(card.id)
-
-        self.col.save()
-        return card_ids
-
-    def set_rollover_hour(self, hour: int) -> "CollectionBuilder":
-        """
-        Set the rollover hour for the collection.
-
-        Args:
-            hour: Hour when new day starts (0-23)
-
-        Returns:
-            Self for method chaining
-        """
-        self.col.conf["rollover"] = hour
-        self.col.save()
-        return self
+    print(f"Total reviews added: {reviews_added}")
+    return reviews_added
 
 
-def create_sample_collection(
-    col: Collection,
-    timezone_offset: int = 4,
-    num_decks: int = 2,
-    cards_per_deck: int = 10,
-    review_days: int = 30
-) -> CollectionBuilder:
+def create_test_collection(output_path: str):
     """
-    Create a sample collection with review history.
-
-    This is a convenience function that creates a realistic test collection
-    with multiple decks and review history over a period of days.
+    Create a test Anki collection with hourly reviews.
 
     Args:
-        col: The collection to populate
-        timezone_offset: Rollover hour (default: 4)
-        num_decks: Number of decks to create
-        cards_per_deck: Number of cards per deck
-        review_days: Number of days of review history
-
-    Returns:
-        CollectionBuilder instance for further customization
+        output_path: Path where the collection should be saved
     """
-    builder = CollectionBuilder(col)
-    builder.set_rollover_hour(timezone_offset)
+    print(f"Creating collection at: {output_path}")
 
-    # Create decks
-    for i in range(num_decks):
-        deck_name = f"Deck {i+1}"
-        builder.add_deck(deck_name)
+    # Create collection
+    col = Collection(output_path)
 
-        # Generate review dates for the past N days
-        review_dates = []
-        today = datetime.now(timezone.utc).date()
+    # Get or create a basic note type
+    models = col.models.all()
+    if models:
+        note_type = models[0]
+    else:
+        # Create basic note type
+        mm = col.models
+        basic = mm.new("Basic")
+        mm.add_field(basic, mm.new_field("Front"))
+        mm.add_field(basic, mm.new_field("Back"))
 
-        for day_offset in range(review_days):
-            review_date = today - timedelta(days=day_offset)
-            review_dates.append(review_date.strftime("%Y-%m-%d"))
+        template = mm.new_template("Card 1")
+        template["qfmt"] = "{{Front}}"
+        template["afmt"] = "{{FrontSide}}\n\n<hr id=answer>\n\n{{Back}}"
+        mm.add_template(basic, template)
 
-        # Add cards with review history
-        builder.add_cards_with_reviews(
-            deck_name=deck_name,
-            num_cards=cards_per_deck,
-            review_dates=review_dates[:review_days // 2],  # Not every day
-            reviews_per_card=2,
-            rollover_hour=timezone_offset
-        )
+        mm.add(basic)
+        note_type = basic
 
-        # Add some due cards
-        builder.add_due_cards(
-            deck_name=deck_name,
-            num_cards=cards_per_deck // 2,
-            due_in_days=7
-        )
+    print(f"Using note type: {note_type['name']}")
 
-    return builder
+    # Create default deck
+    deck_id = col.decks.id("Test Deck")
+    print(f"Created deck: Test Deck (ID: {deck_id})")
+
+    # Create a note and card
+    from anki.notes import Note
+    note = Note(col, note_type)
+    note["Front"] = "Test Card - Hourly Reviews"
+    note["Back"] = "This card has reviews every hour from Dec 1 2023 to Feb 1 2025"
+
+    col.add_note(note, deck_id)
+    print(f"Created note with ID: {note.id}")
+
+    # Get the card
+    cards = note.cards()
+    if not cards:
+        print("ERROR: No card was created from the note!")
+        col.close()
+        sys.exit(1)
+
+    card = cards[0]
+    print(f"Created card with ID: {card.id}")
+
+    # Set card as review type (not new)
+    card.type = CARD_TYPE_REV
+    card.queue = QUEUE_TYPE_REV
+    card.due = col.sched.today
+    col.update_card(card)
+
+    # Generate hourly reviews from Dec 1 2023 to Feb 1 2025 (UTC)
+    start_date = datetime(2023, 12, 1, 0, 0, 0, tzinfo=timezone.utc)
+    end_date = datetime(2025, 2, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+    num_reviews = generate_hourly_reviews(col, card.id, start_date, end_date)
+
+    # Close and save the collection
+    col.close()
+
+    print("\n" + "=" * 60)
+    print("Collection created successfully!")
+    print("=" * 60)
+    print(f"Output file: {output_path}")
+    print(f"Total cards: 1")
+    print(f"Total reviews: {num_reviews}")
+    print(f"Review period: {start_date} to {end_date}")
+    print(f"Review frequency: Every hour")
+    print("=" * 60)
+
+
+def main():
+    """Main entry point for the script."""
+    parser = argparse.ArgumentParser(
+        description="Generate an Anki collection with hourly review data for testing"
+    )
+    parser.add_argument(
+        "--output",
+        required=True,
+        help="Output path for the Anki collection file (e.g., test.anki2)"
+    )
+
+    args = parser.parse_args()
+
+    # Validate output path
+    output_path = Path(args.output)
+
+    # Check if file already exists
+    if output_path.exists():
+        response = input(f"File {output_path} already exists. Overwrite? (y/N): ")
+        if response.lower() != 'y':
+            print("Aborted.")
+            sys.exit(0)
+        # Remove existing file
+        output_path.unlink()
+
+    # Create the collection
+    create_test_collection(str(output_path))
+
+
+if __name__ == "__main__":
+    main()
