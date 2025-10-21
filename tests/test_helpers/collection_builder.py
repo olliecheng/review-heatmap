@@ -37,6 +37,7 @@ class CollectionBuilder:
         self.col = col
         self._decks = {}
         self._note_type = None
+        self._review_counter = 0  # Counter to ensure unique review IDs
 
     def add_deck(self, name: str, parent: Optional[str] = None) -> "CollectionBuilder":
         """
@@ -183,6 +184,11 @@ class CollectionBuilder:
 
         review_timestamp_ms = int(review_time.timestamp() * 1000)
 
+        # Add counter to ensure unique ID for each review
+        # (multiple reviews can occur at the same millisecond)
+        unique_id = review_timestamp_ms + self._review_counter
+        self._review_counter += 1
+
         # Insert into revlog
         # Schema: id, cid, usn, ease, ivl, lastIvl, factor, time, type
         self.col.db.execute(
@@ -190,7 +196,7 @@ class CollectionBuilder:
             INSERT INTO revlog (id, cid, usn, ease, ivl, lastIvl, factor, time, type)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            review_timestamp_ms,  # id (timestamp in ms)
+            unique_id,            # id (unique timestamp in ms)
             card_id,              # cid
             -1,                   # usn
             3,                    # ease (Good)
